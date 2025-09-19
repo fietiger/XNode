@@ -20,6 +20,7 @@ namespace XDisplay.Test
         // 添加坐标系管理字段
         private List<HierarchicalImageContainer> _coordinateSystemContainers = new List<HierarchicalImageContainer>();
         private HierarchicalImageContainer? _currentActiveCoordinateSystem = null;
+        private bool _isUpdatingTree = false; // 防止TreeView更新时的循环调用
 
         public MainWindow()
         {
@@ -394,12 +395,18 @@ namespace XDisplay.Test
                 _coordinateSystemContainers.Clear();
                 _currentActiveCoordinateSystem = null;
                 
+                // 清空TreeView
+                CoordinateSystemTree.Items.Clear();
+                
                 // 生成新的多层坐标系结构
                 var worldContainer = HierarchicalCoordinateSystemDemo.CreateCompleteHierarchy();
                 
                 // 添加到显示控件
                 DisplayControl.AddGeometry(worldContainer);
                 _coordinateSystemContainers.Add(worldContainer);
+                
+                // 更新TreeView
+                UpdateCoordinateSystemTreeView();
                 
                 // 更新ComboBox
                 UpdateCoordinateSystemsComboBox();
@@ -417,7 +424,7 @@ namespace XDisplay.Test
                                "- 3个载具坐标系\n" +
                                "- 4个电路板坐标系\n" +
                                "- 7个子拼板坐标系\n\n" +
-                               "可以通过ComboBox选择不同的坐标系进行查看。",
+                               "可以通过ComboBox或TreeView选择不同的坐标系进行查看。",
                                "成功", MessageBoxButton.OK, MessageBoxImage.Information);
             }
             catch (Exception ex)
@@ -436,6 +443,97 @@ namespace XDisplay.Test
             foreach (var container in _coordinateSystemContainers)
             {
                 AddCoordinateSystemToComboBox(container);
+            }
+        }
+        
+        /// <summary>
+        /// 更新坐标系TreeView
+        /// </summary>
+        private void UpdateCoordinateSystemTreeView()
+        {
+            CoordinateSystemTree.Items.Clear();
+            
+            foreach (var container in _coordinateSystemContainers)
+            {
+                var treeItem = CreateTreeViewItem(container);
+                CoordinateSystemTree.Items.Add(treeItem);
+            }
+        }
+        
+        /// <summary>
+        /// 创建TreeView项
+        /// </summary>
+        private TreeViewItem CreateTreeViewItem(HierarchicalImageContainer container)
+        {
+            var treeItem = new TreeViewItem
+            {
+                Header = container.HierarchicalCoordinateSystem.Name,
+                Tag = container
+            };
+            
+            // 递归添加子容器
+            foreach (var childContainer in container.ChildContainers)
+            {
+                if (childContainer is HierarchicalImageContainer hierarchicalChild)
+                {
+                    var childItem = CreateTreeViewItem(hierarchicalChild);
+                    treeItem.Items.Add(childItem);
+                }
+            }
+            
+            return treeItem;
+        }
+        
+        /// <summary>
+        /// 更新TreeView选择
+        /// </summary>
+        private void UpdateTreeViewSelection(HierarchicalImageContainer container)
+        {
+            // 查找对应的TreeViewItem并选中
+            var treeItem = FindTreeViewItem(CoordinateSystemTree.Items, container);
+            if (treeItem != null)
+            {
+                treeItem.IsSelected = true;
+                treeItem.BringIntoView();
+            }
+        }
+        
+        /// <summary>
+        /// 在TreeView中查找指定容器对应的项
+        /// </summary>
+        private TreeViewItem? FindTreeViewItem(ItemCollection items, HierarchicalImageContainer container)
+        {
+            foreach (TreeViewItem item in items)
+            {
+                if (item.Tag is HierarchicalImageContainer itemContainer && itemContainer == container)
+                {
+                    return item;
+                }
+                
+                if (item.Items.Count > 0)
+                {
+                    var foundItem = FindTreeViewItem(item.Items, container);
+                    if (foundItem != null)
+                    {
+                        return foundItem;
+                    }
+                }
+            }
+            return null;
+        }
+        
+        /// <summary>
+        /// 更新ComboBox选择
+        /// </summary>
+        private void UpdateComboBoxSelection(HierarchicalImageContainer container)
+        {
+            foreach (System.Windows.Controls.ComboBoxItem item in CmbCoordinateSystems.Items)
+            {
+                if (item.Tag is HierarchicalImageContainer itemContainer && itemContainer == container)
+                {
+                    CmbCoordinateSystems.SelectedItem = item;
+                    break;
+                }
             }
         }
         
@@ -477,6 +575,38 @@ namespace XDisplay.Test
                 
                 // 可以在这里添加高亮显示当前坐标系的逻辑
                 HighlightCoordinateSystem(selectedContainer);
+                
+                // 同步更新TreeView
+                if (!_isUpdatingTree)
+                {
+                    _isUpdatingTree = true;
+                    UpdateTreeViewSelection(selectedContainer);
+                    _isUpdatingTree = false;
+                }
+            }
+        }
+        
+        /// <summary>
+        /// TreeView选中项改变事件处理
+        /// </summary>
+        private void CoordinateSystemTree_SelectedItemChanged(object sender, System.Windows.RoutedPropertyChangedEventArgs<object> e)
+        {
+            if (_isUpdatingTree) return;
+            
+            if (e.NewValue is TreeViewItem treeItem && treeItem.Tag is HierarchicalImageContainer container)
+            {
+                _isUpdatingTree = true;
+                _currentActiveCoordinateSystem = container;
+                
+                // 在状态栏显示当前坐标系信息
+                UpdateCoordinateSystemStatusBar(container);
+                
+                // 高亮显示当前坐标系
+                HighlightCoordinateSystem(container);
+                
+                // 同步更新ComboBox
+                UpdateComboBoxSelection(container);
+                _isUpdatingTree = false;
             }
         }
         

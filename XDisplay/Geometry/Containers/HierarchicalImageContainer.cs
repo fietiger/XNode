@@ -83,10 +83,10 @@ namespace XDisplay.Geometry.Containers
             {
                 if (_parentContainer != value)
                 {
-                    // 从旧父容器移除
-                    // 从旧父容器移除
+                    // 从旧父容器移除事件监听
                     if (_parentContainer != null)
                     {
+                        _parentContainer.ContainerTransformChanged -= OnParentContainerTransformChanged;
                         var parentAsContainer = _parentContainer as HierarchicalImageContainer;
                         parentAsContainer?._childContainers.Remove(this);
                     }
@@ -100,6 +100,8 @@ namespace XDisplay.Geometry.Containers
                         newParentAsContainer?._childContainers.Add(this);
                         // 更新分层坐标系的父级关系
                         HierarchicalCoordinateSystem.Parent = _parentContainer.HierarchicalCoordinateSystem;
+                        // 添加事件监听
+                        _parentContainer.ContainerTransformChanged += OnParentContainerTransformChanged;
                     }
                     else
                     {
@@ -537,27 +539,8 @@ namespace XDisplay.Geometry.Containers
                     }
                 }
 
-                // 绘制容器边框
-                if (Stroke != null)
-                {
-                    Rect containerRect = new Rect(_position, _size);
-                    if (transform != null)
-                    {
-                        containerRect = transform.WorldToScreen(containerRect);
-                    }
-                    
-                    if (Math.Abs(_rotation) > 0.001)
-                    {
-                        Point center = new Point(containerRect.X + containerRect.Width / 2, containerRect.Y + containerRect.Height / 2);
-                        dc.PushTransform(new RotateTransform(_rotation, center.X, center.Y));
-                        dc.DrawRectangle(Fill, Stroke, containerRect);
-                        dc.Pop();
-                    }
-                    else
-                    {
-                        dc.DrawRectangle(Fill, Stroke, containerRect);
-                    }
-                }
+                // 绘制坐标系：两个垂直带箭头的线段（固定屏幕大小）
+                DrawCoordinateSystem(dc, transform);
 
                 // 设置剪裁区域（如果启用）
                 if (_clipChildren)
@@ -675,6 +658,51 @@ namespace XDisplay.Geometry.Containers
             }
 
             return clone;
+        }
+
+        #endregion
+
+        #region 私有方法
+
+        /// <summary>
+        /// 绘制坐标系：两个垂直带箭头的线段（固定屏幕大小）
+        /// </summary>
+        /// <param name="context">绘制上下文</param>
+        /// <param name="transform">视口变换</param>
+        private void DrawCoordinateSystem(DrawingContext context, ViewportTransform? transform)
+        {
+            // 计算坐标系原点（容器中心）
+            Point center = new Point(_position.X + _size.Width / 2, _position.Y + _size.Height / 2);
+            Point screenCenter = transform?.WorldToScreen(center) ?? center;
+
+            // 固定屏幕大小（像素）
+            double axisLength = 20; // 坐标轴长度
+            double arrowSize = 5;   // 箭头大小
+
+            // 创建画笔
+            Pen axisPen = Stroke ?? new Pen(Brushes.Blue, 2);
+            
+            // 绘制X轴（水平线段，带箭头）
+            Point xStart = new Point(screenCenter.X - axisLength, screenCenter.Y);
+            Point xEnd = new Point(screenCenter.X + axisLength, screenCenter.Y);
+            context.DrawLine(axisPen, xStart, xEnd);
+            
+            // 绘制X轴箭头
+            Point xArrow1 = new Point(xEnd.X - arrowSize, xEnd.Y - arrowSize);
+            Point xArrow2 = new Point(xEnd.X - arrowSize, xEnd.Y + arrowSize);
+            context.DrawLine(axisPen, xEnd, xArrow1);
+            context.DrawLine(axisPen, xEnd, xArrow2);
+
+            // 绘制Y轴（垂直线段，带箭头）
+            Point yStart = new Point(screenCenter.X, screenCenter.Y - axisLength);
+            Point yEnd = new Point(screenCenter.X, screenCenter.Y + axisLength);
+            context.DrawLine(axisPen, yStart, yEnd);
+            
+            // 绘制Y轴箭头
+            Point yArrow1 = new Point(yEnd.X - arrowSize, yEnd.Y - arrowSize);
+            Point yArrow2 = new Point(yEnd.X + arrowSize, yEnd.Y - arrowSize);
+            context.DrawLine(axisPen, yEnd, yArrow1);
+            context.DrawLine(axisPen, yEnd, yArrow2);
         }
 
         #endregion
@@ -847,6 +875,15 @@ namespace XDisplay.Geometry.Containers
             OnGeometryChanged(GeometryChangeType.Appearance);
         }
 
+        /// <summary>
+        /// 父容器变换改变事件处理
+        /// </summary>
+        private void OnParentContainerTransformChanged(object? sender, ContainerTransformChangedEventArgs e)
+        {
+            // 当父容器变换改变时，更新当前容器的显示
+            OnGeometryChanged(GeometryChangeType.Appearance);
+        }
+        
         /// <summary>
         /// 触发容器变换改变事件
         /// </summary>

@@ -14,6 +14,10 @@
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="250" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
 
         <!--  菜单栏  -->
         <Menu Grid.Row="0">
@@ -157,8 +161,18 @@
         </ToolBarTray>
 
         <!--  主显示区域  -->
+        <!--  坐标系树形控件  -->
+        <TreeView 
+            x:Name="CoordinateSystemTree" 
+            Grid.Row="2" 
+            Grid.Column="0" 
+            Margin="5" 
+            SelectedItemChanged="CoordinateSystemTree_SelectedItemChanged" />
+        
+        <!--  图形显示控件  -->
         <Border
             Grid.Row="2"
+            Grid.Column="1"
             Margin="0"
             Padding="0"
             BorderBrush="Gray"
@@ -172,7 +186,7 @@
         </Border>
 
         <!--  状态栏  -->
-        <StatusBar Grid.Row="3">
+        <StatusBar Grid.Row="3" Grid.ColumnSpan="2">
             <StatusBarItem>
                 <TextBlock Name="TxtMode" Text="模式: 选择" />
             </StatusBarItem>

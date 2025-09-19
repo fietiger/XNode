@@ -21,6 +21,12 @@ namespace XDisplay.ConsoleTest
             // 测试坐标转换功能
             TestCoordinateTransformation();
             
+            // 测试坐标系层级移动
+            CoordinateSystemTest.TestHierarchicalMovement();
+            
+            // 测试几何图形挂载
+            GeometryMountingDemo.DemonstrateGeometryMounting();
+            
             Console.WriteLine("\n所有测试完成！");
             Console.WriteLine("按任意键退出...");
             Console.ReadKey();

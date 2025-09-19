@@ -1,5 +1,5 @@
 using System;
-using System.Collections.Generic;
+using System.Linq;
 using System.Windows;
 using System.Windows.Media;
 using XDisplay.Geometry;
@@ -8,7 +8,7 @@ using XDisplay.Geometry.Shapes;
 namespace XDisplay.Layers
 {
     /// <summary>
-    /// 选择图层 - 负责显示选择框、编辑手柄等交互元素
+    /// 选择图层 - 负责绘制选择矩形和编辑手柄
     /// </summary>
     public class SelectionLayer : LayerBase
     {
@@ -72,6 +72,24 @@ namespace XDisplay.Layers
 
         /// <summary>旋转句柄颜色</summary>
         public Brush RotationHandleBrush { get; set; } = Brushes.Orange;
+
+        /// <summary>悬停时的控制点放大倍数</summary>
+        public double HoverScaleFactor { get; set; } = 1.5;
+
+        /// <summary>悬停时的控制点颜色</summary>
+        public Brush HoverControlPointBrush { get; set; } = Brushes.Yellow;
+
+        /// <summary>悬停时的控制点边框颜色</summary>
+        public Brush HoverControlPointBorderBrush { get; set; } = Brushes.Red;
+
+        /// <summary>选中时的控制点颜色</summary>
+        public Brush SelectedControlPointBrush { get; set; } = Brushes.Red;
+
+        /// <summary>选中时的控制点边框颜色</summary>
+        public Brush SelectedControlPointBorderBrush { get; set; } = Brushes.DarkRed;
+
+        /// <summary>选中时的控制点放大倍数</summary>
+        public double SelectedScaleFactor { get; set; } = 1.3;
 
         #endregion
 
@@ -179,6 +197,45 @@ namespace XDisplay.Layers
             return -1;
         }
 
+        /// <summary>
+        /// 设置悬停的控制点索引
+        /// </summary>
+        /// <param name="hoveredIndex">悬停的控制点索引，-1表示没有悬停</param>
+        public void SetHoveredControlPoint(int hoveredIndex)
+        {
+            if (_hoveredControlPointIndex != hoveredIndex)
+            {
+                _hoveredControlPointIndex = hoveredIndex;
+                Update();
+            }
+        }
+
+        /// <summary>
+        /// 设置当前选中的控制点索引
+        /// </summary>
+        /// <param name="selectedIndex">选中的控制点索引，-1表示没有选中</param>
+        public void SetSelectedControlPoint(int selectedIndex)
+        {
+            if (_selectedControlPointIndex != selectedIndex)
+            {
+                _selectedControlPointIndex = selectedIndex;
+                Update();
+            }
+        }
+
+        /// <summary>
+        /// 设置当前拖拽的控制点索引
+        /// </summary>
+        /// <param name="draggedIndex">拖拽的控制点索引，-1表示没有拖拽</param>
+        public void SetDraggedControlPoint(int draggedIndex)
+        {
+            if (_draggedControlPointIndex != draggedIndex)
+            {
+                _draggedControlPointIndex = draggedIndex;
+                Update();
+            }
+        }
+
         #endregion
 
         #region 保护方法
@@ -241,6 +298,14 @@ namespace XDisplay.Layers
             
             _rotationHandlePen = new Pen(RotationHandleBrush, 2.0);
             _rotationHandlePen.Freeze();
+            
+            // 初始化悬停状态的画笔
+            _hoverControlPointPen = new Pen(HoverControlPointBorderBrush, 1.0);
+            _hoverControlPointPen.Freeze();
+            
+            // 初始化选中状态的画笔
+            _selectedControlPointPen = new Pen(SelectedControlPointBorderBrush, 1.0);
+            _selectedControlPointPen.Freeze();
         }
 
         /// <summary>
@@ -322,22 +387,56 @@ namespace XDisplay.Layers
                     
                     var controlPointType = geometry.GetControlPointType(i);
                     
+                    // 确定当前控制点的绘制参数
+                    Brush fillBrush = ControlPointBrush;
+                    Pen borderPen = _controlPointPen;
+                    double sizeFactor = 1.0;
+                    
+                    // 检查是否是当前拖拽的控制点
+                    if (i == _draggedControlPointIndex)
+                    {
+                        fillBrush = SelectedControlPointBrush;
+                        borderPen = _selectedControlPointPen;
+                        sizeFactor = SelectedScaleFactor;
+                    }
+                    // 检查是否是当前选中的控制点
+                    else if (i == _selectedControlPointIndex)
+                    {
+                        fillBrush = SelectedControlPointBrush;
+                        borderPen = _selectedControlPointPen;
+                        sizeFactor = SelectedScaleFactor;
+                    }
+                    // 检查是否是悬停的控制点
+                    else if (i == _hoveredControlPointIndex)
+                    {
+                        fillBrush = HoverControlPointBrush;
+                        borderPen = _hoverControlPointPen;
+                        sizeFactor = HoverScaleFactor;
+                    }
+                    // 检查是否是移动控制点
+                    else if (controlPointType == ControlPointType.Move)
+                    {
+                        fillBrush = MoveHandleBrush;
+                    }
+                    
                     if (controlPointType == ControlPointType.Move)
                     {
                         // 移动句柄绘制为圆形（1.5倍大小）
-                        double moveHandleSize = halfSize * 1.5;
-                        context.DrawEllipse(MoveHandleBrush, _controlPointPen, screenPoint, moveHandleSize, moveHandleSize);
+                        double moveHandleSize = halfSize * 1.5 * sizeFactor;
+                        context.DrawEllipse(fillBrush, borderPen, screenPoint, moveHandleSize, moveHandleSize);
                     }
                     else
                     {
                         // 调整大小句柄绘制为正方形
+                        double actualSize = ControlPointSize * sizeFactor;
+                        double actualHalfSize = actualSize / 2;
                         Rect controlPointRect = new Rect(
-                            screenPoint.X - halfSize,
-                            screenPoint.Y - halfSize,
-                            ControlPointSize,
-                            ControlPointSize);
+                            screenPoint.X - actualHalfSize,
+                            screenPoint.Y - actualHalfSize,
+                            actualSize,
+                            actualSize);
 
-                        context.DrawRectangle(ControlPointBrush, _controlPointPen, controlPointRect);
+                        context.DrawRectangle(fillBrush, borderPen, controlPointRect);
                     }
                 }
             }
@@ -390,28 +489,67 @@ namespace XDisplay.Layers
                 Point screenPoint = WorldToScreen(controlPoints[i]);
                 var controlPointType = rotatedRect.GetControlPointType(i);
                 
+                // 确定当前控制点的绘制参数
+                Brush fillBrush = ControlPointBrush;
+                Pen borderPen = _controlPointPen;
+                double sizeFactor = 1.0;
+                
+                // 检查是否是当前拖拽的控制点
+                if (i == _draggedControlPointIndex)
+                {
+                    fillBrush = SelectedControlPointBrush;
+                    borderPen = _selectedControlPointPen;
+                    sizeFactor = SelectedScaleFactor;
+                }
+                // 检查是否是当前选中的控制点
+                else if (i == _selectedControlPointIndex)
+                {
+                    fillBrush = SelectedControlPointBrush;
+                    borderPen = _selectedControlPointPen;
+                    sizeFactor = SelectedScaleFactor;
+                }
+                // 检查是否是悬停的控制点
+                else if (i == _hoveredControlPointIndex)
+                {
+                    fillBrush = HoverControlPointBrush;
+                    borderPen = _hoverControlPointPen;
+                    sizeFactor = HoverScaleFactor;
+                }
+                // 检查是否是移动控制点
+                else if (controlPointType == ControlPointType.Move)
+                {
+                    fillBrush = MoveHandleBrush;
+                }
+                // 检查是否是旋转控制点
+                else if (controlPointType == ControlPointType.Rotate)
+                {
+                    fillBrush = RotationHandleBrush;
+                }
+                
                 if (controlPointType == ControlPointType.Move)
                 {
                     // 中心移动句柄（圆形，1.5倍大小）
-                    double moveHandleSize = halfSize * 1.5;
-                    context.DrawEllipse(MoveHandleBrush, _controlPointPen, screenPoint, moveHandleSize, moveHandleSize);
+                    double moveHandleSize = halfSize * 1.5 * sizeFactor;
+                    context.DrawEllipse(fillBrush, borderPen, screenPoint, moveHandleSize, moveHandleSize);
                 }
                 else if (controlPointType == ControlPointType.Resize)
                 {
                     // 调整大小句柄（正方形）
+                    double actualSize = ControlPointSize * sizeFactor;
+                    double actualHalfSize = actualSize / 2;
                     Rect controlPointRect = new Rect(
-                        screenPoint.X - halfSize,
-                        screenPoint.Y - halfSize,
-                        ControlPointSize,
-                        ControlPointSize);
+                        screenPoint.X - actualHalfSize,
+                        screenPoint.Y - actualHalfSize,
+                        actualSize,
+                        actualSize);
 
-                    context.DrawRectangle(ControlPointBrush, _controlPointPen, controlPointRect);
+                    context.DrawRectangle(fillBrush, borderPen, controlPointRect);
                 }
                 else if (controlPointType == ControlPointType.Rotate)
                 {
                     // 旋转句柄（略大的圆形）
-                    double rotationHandleSize = ControlPointSize * 0.75; // 1.5倍大小的半径
-                    context.DrawEllipse(RotationHandleBrush, _controlPointPen, screenPoint, rotationHandleSize, rotationHandleSize);
+                    double rotationHandleSize = ControlPointSize * 0.75 * sizeFactor; // 1.5倍大小的半径
+                    context.DrawEllipse(fillBrush, borderPen, screenPoint, rotationHandleSize, rotationHandleSize);
                 }
             }
 
@@ -540,11 +678,16 @@ namespace XDisplay.Layers
         private Rect? _selectionRect;
         private Point? _selectionStartPoint;
         private IGeometry? _editingGeometry;
+        private int _hoveredControlPointIndex = -1; // 悬停的控制点索引
+        private int _selectedControlPointIndex = -1; // 选中的控制点索引
+        private int _draggedControlPointIndex = -1; // 拖拽的控制点索引
 
         // 画笔缓存
         private Pen? _selectionPen;
         private Pen? _controlPointPen;
         private Pen? _rotationHandlePen;
+        private Pen? _hoverControlPointPen; // 悬停状态的画笔
+        private Pen? _selectedControlPointPen; // 选中状态的画笔
 
         #endregion
     }
