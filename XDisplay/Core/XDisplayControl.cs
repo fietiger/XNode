@@ -349,6 +349,8 @@ namespace XDisplay.Core
         {
             GeometryLayer.ClearSelection();
             SelectionLayer.EditingGeometry = null;
+            // 清除控制点状态
+            ClearControlPointStates();
         }
 
         /// <summary>
@@ -358,6 +360,8 @@ namespace XDisplay.Core
         {
             GeometryLayer.DeleteSelected();
             SelectionLayer.EditingGeometry = null;
+            // 清除控制点状态
+            ClearControlPointStates();
         }
 
         #endregion
@@ -702,7 +706,7 @@ namespace XDisplay.Core
             if (!_isDragging)
             {
                 // 开始拖拽
-                double dragThreshold = 3.0; // 像素
+                double dragThreshold = 1.0; // 像素 - 进一步降低阈值使拖拽更容易触发
                 double distance = Math.Sqrt(
                     Math.Pow(screenPoint.X - _lastMousePosition.X, 2) +
                     Math.Pow(screenPoint.Y - _lastMousePosition.Y, 2));
@@ -722,11 +726,31 @@ namespace XDisplay.Core
 
         private void HandleMouseHover(Point worldPoint, MouseEventArgs e)
         {
-            // 悬停处理 - 更新光标等
+            // 悬停处理 - 更新光标和控制点悬停状态
             if (_currentMode == InteractionMode.Select)
             {
                 var hitGeometry = GeometryLayer.HitTest(worldPoint);
                 Cursor = hitGeometry != null ? Cursors.Hand : Cursors.Arrow;
+                
+                // 检查是否悬停在控制点上（仅在没有选中控制点时）
+                int hoveredControlPointIndex = -1;
+                if (_selectedControlPointIndex == -1 && SelectionLayer.EditingGeometry != null)
+                {
+                    hoveredControlPointIndex = SelectionLayer.HitTestControlPoint(worldPoint);
+                }
+                
+                // 如果悬停的控制点发生变化，更新选择图层
+                if (_hoveredControlPointIndex != hoveredControlPointIndex)
+                {
+                    _hoveredControlPointIndex = hoveredControlPointIndex;
+                    SelectionLayer.SetHoveredControlPoint(_hoveredControlPointIndex);
+                    
+                    // 更新光标
+                    if (_hoveredControlPointIndex >= 0)
+                    {
+                        Cursor = Cursors.Hand;
+                    }
+                }
             }
         }
 
@@ -755,8 +779,18 @@ namespace XDisplay.Core
             int controlPointIndex = SelectionLayer.HitTestControlPoint(worldPoint);
             if (controlPointIndex >= 0 && SelectionLayer.EditingGeometry != null)
             {
-                _draggedControlPointIndex = controlPointIndex;
-                _draggedGeometry = SelectionLayer.EditingGeometry;
+                // 确保任何时候只有一个控制点处于选中状态
+                if (_selectedControlPointIndex != controlPointIndex)
+                {
+                    // 在设置新的选中状态之前，先清除所有可能的选中和拖拽状态
+                    ClearControlPointStates();
+                    
+                    // 设置新的选中的控制点
+                    _selectedControlPointIndex = controlPointIndex;
+                    SelectionLayer.SetSelectedControlPoint(_selectedControlPointIndex);
+                }
+                
+                // 注意：不立即设置为拖拽状态，等待鼠标移动超过阈值后再设置
                 return;
             }
 
@@ -797,6 +831,8 @@ namespace XDisplay.Core
                 if (!isCtrlPressed)
                 {
                     GeometryLayer.ClearSelection();
+                    // 清除控制点状态
+                    ClearControlPointStates();
                 }
                 // 开始框选
                 SelectionLayer.StartSelectionRect(worldPoint);
@@ -809,8 +845,35 @@ namespace XDisplay.Core
         private void HandleSingleClick(Point worldPoint, MouseButtonEventArgs e)
         {
             // 处理单击事件（非拖拽）
+            // 如果有选中的控制点，则清除选中状态
+            if (_selectedControlPointIndex >= 0)
+            {
+                _selectedControlPointIndex = -1;
+                SelectionLayer.SetSelectedControlPoint(-1);
+            }
         }
 
+        /// <summary>
+        /// 清除所有控制点相关状态
+        /// </summary>
+        private void ClearControlPointStates()
+        {
+            // 清除选中状态
+            if (_selectedControlPointIndex >= 0)
+            {
+                _selectedControlPointIndex = -1;
+                SelectionLayer.SetSelectedControlPoint(-1);
+            }
+            
+            // 清除拖拽状态
+            if (_draggedControlPointIndex >= 0)
+            {
+                _draggedControlPointIndex = -1;
+                _draggedGeometry = null;
+                SelectionLayer.SetDraggedControlPoint(-1);
+            }
+        }
+        
         #endregion
 
         #region 私有方法 - 循环选择支持
@@ -890,7 +953,14 @@ namespace XDisplay.Core
         {
             if (_currentMode == InteractionMode.Select)
             {
-                if (SelectionLayer.SelectionRect.HasValue)
+                if (_selectedControlPointIndex >= 0 && SelectionLayer.EditingGeometry != null)
+                {
+                    // 开始拖拽控制点
+                    _draggedControlPointIndex = _selectedControlPointIndex;
+                    _draggedGeometry = SelectionLayer.EditingGeometry;
+                    SelectionLayer.SetDraggedControlPoint(_draggedControlPointIndex);
+                }
+                else if (SelectionLayer.SelectionRect.HasValue)
                 {
                     // 框选拖拽
                     SelectionLayer.UpdateSelectionRect(worldPoint);
@@ -956,12 +1026,26 @@ namespace XDisplay.Core
 
         private void EndDragOperation(Point worldPoint)
         {
-            if (_currentMode == InteractionMode.Select && SelectionLayer.SelectionRect.HasValue)
+            if (_currentMode == InteractionMode.Select)
             {
-                // 完成框选
-                bool isCtrlPressed = Keyboard.IsKeyDown(Key.LeftCtrl) || Keyboard.IsKeyDown(Key.RightCtrl);
-                GeometryLayer.SelectGeometriesInRect(SelectionLayer.SelectionRect.Value, isCtrlPressed);
-                SelectionLayer.ClearSelectionRect();
+                if (SelectionLayer.SelectionRect.HasValue)
+                {
+                    // 完成框选
+                    bool isCtrlPressed = Keyboard.IsKeyDown(Key.LeftCtrl) || Keyboard.IsKeyDown(Key.RightCtrl);
+                    GeometryLayer.SelectGeometriesInRect(SelectionLayer.SelectionRect.Value, isCtrlPressed);
+                    SelectionLayer.ClearSelectionRect();
+                }
+                else if (_draggedControlPointIndex >= 0)
+                {
+                    // 完成控制点拖拽
+                    _draggedControlPointIndex = -1;
+                    _draggedGeometry = null;
+                    SelectionLayer.SetDraggedControlPoint(-1);
+                }
+                
+                // 清除选中状态
+                _selectedControlPointIndex = -1;
+                SelectionLayer.SetSelectedControlPoint(-1);
             }
             else if (_isDrawing && _drawingStartPoint.HasValue)
             {
@@ -1087,6 +1171,8 @@ namespace XDisplay.Core
         private bool _isDragging;
         private IGeometry? _draggedGeometry;
         private int _draggedControlPointIndex = -1;
+        private int _hoveredControlPointIndex = -1; // 悬停的控制点索引
+        private int _selectedControlPointIndex = -1; // 选中的控制点索引
 
         // 循环选择状态
         private Point? _lastClickPosition;

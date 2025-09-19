@@ -18,6 +18,15 @@ namespace XDisplay.Test
             // 测试分层容器的创建
             TestHierarchicalContainer();
             
+            // 测试悬停功能
+            HoverTest.TestHoverFunctionality();
+            
+            // 测试控制点状态功能
+            ControlPointTest.TestControlPointStates();
+            
+            // 测试点击解除选中功能
+            ClickTest.TestClickUnselect();
+            
             Console.WriteLine("\n所有测试完成！");
             Console.ReadKey();
         }
