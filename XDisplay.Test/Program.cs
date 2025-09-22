@@ -27,6 +27,9 @@ namespace XDisplay.Test
             // 测试点击解除选中功能
             ClickTest.TestClickUnselect();
             
+            // 测试控制点状态重置功能
+            ControlPointStateTest.TestControlPointStateReset();
+            
             Console.WriteLine("\n所有测试完成！");
             Console.ReadKey();
         }

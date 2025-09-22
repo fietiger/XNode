@@ -158,6 +158,17 @@ namespace XDisplay.Layers
             SelectionRect = null;
             _selectionStartPoint = null;
         }
+        
+        /// <summary>
+        /// 清除所有控制点状态
+        /// </summary>
+        public void ClearControlPointStates()
+        {
+            _hoveredControlPointIndex = -1;
+            _selectedControlPointIndex = -1;
+            _draggedControlPointIndex = -1;
+            Update();
+        }
 
         /// <summary>
         /// 命中测试控制点
@@ -279,6 +290,11 @@ namespace XDisplay.Layers
                 e.ChangeType == GeometryChangeType.Rotation)
             {
                 Update();
+            }
+            // 当几何图形的选择状态改变时，清除控制点状态
+            else if (e.ChangeType == GeometryChangeType.Selection && _editingGeometry != null && !_editingGeometry.IsSelected)
+            {
+                ClearControlPointStates();
             }
         }
 

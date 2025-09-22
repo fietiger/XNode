@@ -351,6 +351,8 @@ namespace XDisplay.Core
             SelectionLayer.EditingGeometry = null;
             // 清除控制点状态
             ClearControlPointStates();
+            // 确保SelectionLayer也清除控制点状态
+            SelectionLayer.ClearControlPointStates();
         }
 
         /// <summary>
@@ -362,6 +364,8 @@ namespace XDisplay.Core
             SelectionLayer.EditingGeometry = null;
             // 清除控制点状态
             ClearControlPointStates();
+            // 确保SelectionLayer也清除控制点状态
+            SelectionLayer.ClearControlPointStates();
         }
 
         #endregion
@@ -872,6 +876,13 @@ namespace XDisplay.Core
                 _draggedGeometry = null;
                 SelectionLayer.SetDraggedControlPoint(-1);
             }
+            
+            // 清除悬停状态
+            if (_hoveredControlPointIndex >= 0)
+            {
+                _hoveredControlPointIndex = -1;
+                SelectionLayer.SetHoveredControlPoint(-1);
+            }
         }
         
         #endregion
@@ -1043,7 +1054,7 @@ namespace XDisplay.Core
                     SelectionLayer.SetDraggedControlPoint(-1);
                 }
                 
-                // 清除选中状态
+                // 清除选中状态（重要：确保句柄不会以选中状态出现）
                 _selectedControlPointIndex = -1;
                 SelectionLayer.SetSelectedControlPoint(-1);
             }
